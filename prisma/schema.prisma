@@ -1,0 +1,179 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // url      = env("DATABASE_URL")
+  
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  address   String?
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------- Medicines ----------------
+
+model MedicineItem {
+  id              Int             @id @default(autoincrement())
+  name            String
+  manufacturer    String?
+  composition     Json?
+  itemType        ItemType        @default(Tablet)
+  gst             Float
+  tabletsPerStrip Int
+  HSNCode         String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  batches         MedicineBatch[]
+
+  purchaseItems PurchaseItem[]
+
+  saleItems SaleItem[]
+}
+
+model MedicineBatch {
+  id             Int            @id @default(autoincrement())
+  MedicineItem   MedicineItem   @relation(fields: [MedicineItemId], references: [id])
+  MedicineItemId Int
+  batchNo        String
+  expiryDate     DateTime
+  stockQuantity  Int            @default(0)
+  ptr            Float
+  mrp            Float
+  discount       Float
+  costPrice      Float
+  purchases      PurchaseItem[]
+  saleItems      SaleItem[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([MedicineItemId, batchNo]) // same batch cannot repeat for same medicine
+}
+
+enum ItemType {
+  Tablet
+  Capsule
+  Injection
+  Syrup
+  Ointment
+  Gel
+  Unit
+  Other
+}
+
+// ---------------- Suppliers ----------------
+
+model Supplier {
+  id            Int                   @id @default(autoincrement())
+  name          String
+  contactPerson String?
+  contact       String?
+  drugLicenseNo String?               @unique
+  gstNumber     String?               @unique
+  email         String?               @unique
+  address       String?
+  purchases     PurchaseTransaction[]
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+}
+
+// ---------------- Purchase Module ----------------
+
+model PurchaseTransaction {
+  id          Int            @id @default(autoincrement())
+  invoiceNo   String
+  supplier    Supplier       @relation(fields: [supplierId], references: [id])
+  supplierId  Int
+  totalAmount Float
+  date        DateTime
+  items       PurchaseItem[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model PurchaseItem {
+  id              Int                 @id @default(autoincrement())
+  purchase        PurchaseTransaction @relation(fields: [purchaseId], references: [id])
+  purchaseId      Int
+  medicine        MedicineItem        @relation(fields: [medicineId], references: [id])
+  medicineId      Int
+  batch           MedicineBatch?      @relation(fields: [batchId], references: [id])
+  batchId         Int?
+  batchNo         String
+  expiryDate      DateTime
+  ptr             Float
+  mrp             Float
+  discount        Float
+  gst             Float
+  quantityStrips  Int
+  tabletsPerStrip Int
+  looseTablets    Int
+  free            Int
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+}
+
+// ---------------- Sales Module ----------------
+
+model SaleTransaction {
+  id           Int        @id @default(autoincrement())
+  invoiceNo    String
+  customer   Customer?   @relation(fields: [customerId], references: [id])
+  customerId  Int?
+  customerName String? @default("unknown customer")
+  totalAmount  Float
+  date         DateTime
+  items        SaleItem[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model SaleItem {
+  id             Int             @id @default(autoincrement())
+  sale           SaleTransaction @relation(fields: [saleId], references: [id])
+  saleId         Int
+  medicine       MedicineItem    @relation(fields: [medicineId], references: [id])
+  medicineId     Int
+  batch          MedicineBatch   @relation(fields: [batchId], references: [id])
+  batchId        Int
+  quantityStrips Int?
+  looseTablets   Int?
+  stockQuantity  Int?
+  mrp            Float?
+  discount       Float?
+  gst            Float?
+  sellingPrice   Float?
+  itemTotal      Float?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+// ---------------- Customer (optional for CRM) ----------------
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String?  @unique
+  email     String?  @unique
+  address   String?
+  sales     SaleTransaction[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
