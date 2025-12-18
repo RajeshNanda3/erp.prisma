@@ -12,7 +12,6 @@ generator client {
 datasource db {
   provider = "postgresql"
   // url      = env("DATABASE_URL")
-  
 }
 
 model User {
@@ -44,7 +43,9 @@ model MedicineItem {
 
   purchaseItems PurchaseItem[]
 
-  saleItems SaleItem[]
+  saleItems         SaleItem[]
+  patientMedicines  PatientMedicine[]
+  medicationReports MedicationReport[]
 }
 
 model MedicineBatch {
@@ -134,9 +135,9 @@ model PurchaseItem {
 model SaleTransaction {
   id           Int        @id @default(autoincrement())
   invoiceNo    String
-  customer   Customer?   @relation(fields: [customerId], references: [id])
-  customerId  Int?
-  customerName String? @default("unknown customer")
+  customer     Customer?  @relation(fields: [customerId], references: [id])
+  customerId   Int?
+  customerName String?    @default("unknown customer")
   totalAmount  Float
   date         DateTime
   items        SaleItem[]
@@ -167,13 +168,90 @@ model SaleItem {
 // ---------------- Customer (optional for CRM) ----------------
 
 model Customer {
-  id        Int      @id @default(autoincrement())
-  name      String
-  phone     String?  @unique
-  email     String?  @unique
-  address   String?
-  sales     SaleTransaction[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                Int                @id @default(autoincrement())
+  name              String
+  phone             String?            @unique
+  email             String?            @unique
+  address           String?
+  sales             SaleTransaction[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  patientMedicines  PatientMedicine[]
+  reminders         Reminder[]
+  medicationReports MedicationReport[]
 }
 
+// ---------------- Medication Plans & Reminders ----------------
+
+// PatientMedicine ties a customer to a specific medicine instance
+// and tracks the customer's current stock and dosage information.
+model PatientMedicine {
+  id           Int              @id @default(autoincrement())
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  customerId   Int
+  medicine     MedicineItem     @relation(fields: [medicineId], references: [id])
+  medicineId   Int
+  dosagePerDay Float // number of tablets per day assigned to the customer
+  unitsPerPack Int? // tablets per pack/strip (optional)
+  currentStock Int              @default(0) // number of tablets currently with the customer
+  notes        String?
+  active       Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  plans        MedicationPlan[]
+
+  @@unique([customerId, medicineId])
+  @@index([customerId])
+  @@index([medicineId])
+}
+
+// MedicationPlan defines when refill reminders should be created/sent
+model MedicationPlan {
+  id                Int             @id @default(autoincrement())
+  patientMedicine   PatientMedicine @relation(fields: [patientMedicineId], references: [id])
+  patientMedicineId Int
+  dosagePerDay      Float
+  notifyBeforeDays  Int             @default(3) // notify N days before depletion
+  // JSON array of times in local timezone, e.g. ['08:00','20:00']
+  reminderTimes     Json?
+  timezone          String? // IANA timezone identifier for scheduling
+  active            Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  reminders         Reminder[]
+}
+
+// Reminder is a persisted notification entry a worker will process
+model Reminder {
+  id               Int            @id @default(autoincrement())
+  medicationPlan   MedicationPlan @relation(fields: [medicationPlanId], references: [id])
+  medicationPlanId Int
+  customer         Customer       @relation(fields: [customerId], references: [id])
+  customerId       Int
+  scheduledAt      DateTime // when the notification should be sent (UTC)
+  channel          String // 'email' | 'sms' | 'push'
+  payload          Json?
+  sentAt           DateTime?
+  status           String         @default("pending") // 'pending'|'sent'|'failed'
+  failureReason    String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([scheduledAt])
+  @@index([customerId])
+}
+
+// MedicationReport stores periodic aggregated stats (optional)
+model MedicationReport {
+  id              Int           @id @default(autoincrement())
+  customer        Customer?     @relation(fields: [customerId], references: [id])
+  customerId      Int?
+  medicine        MedicineItem? @relation(fields: [medicineId], references: [id])
+  medicineId      Int?
+  periodStart     DateTime
+  periodEnd       DateTime
+  totalSold       Int           @default(0)
+  totalPurchased  Int           @default(0)
+  avgSellingPrice Float?
+  createdAt       DateTime      @default(now())
+}

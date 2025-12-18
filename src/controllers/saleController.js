@@ -2,9 +2,11 @@ import { prisma } from "../prismaClient.js";
 
 export const createSale = async (req, res) => {
   try {
-    const { invoiceNo, customer, customerName, items, totalAmount, saleDate } =
+    const { invoiceNo, customerId, customerName, items, totalAmount, saleDate } =
       req.body;
-    console.log(req.body);
+    // console.log(req.body);
+    console.log("hii rajesh", customerId);
+    // console.log(customerName)
     // process each item in items array: create sale items
     const saleItemsCreate = [];
     for (const it of items || []) {
@@ -20,17 +22,19 @@ export const createSale = async (req, res) => {
       const sellingPrice = stockQuantity
         ? itemTotal / stockQuantity
         : itemTotal;
-      console.log(
-        customer,
-        medicineId,
-        batchNo,
-        stockQuantity,
-        looseTablets,
-        mrp,
-        discount,
-        gst,
-        itemTotal
-      );
+      const customerId = req.body.customerId;
+      // console.log(
+      //   customerId,
+      //   medicineId,
+      //   batchNo,
+      //   stockQuantity,
+      //   looseTablets,
+      //   mrp,
+      //   discount,
+      //   gst,
+      //   itemTotal,
+      //   customerName
+      // );
       if (!medicineId)
         throw { status: 400, message: "medicineId is required for each item" };
       if (!stockQuantity || stockQuantity <= 0)
@@ -90,9 +94,7 @@ export const createSale = async (req, res) => {
       data: {
         invoiceNo: invoiceNo || `INV-${Date.now()}`,
         // If schema defines a relation `customer` (no scalar `customerId`), connect it.
-        ...(customer
-          ? { customer: { connect: { id: parseInt(customer) } } }
-          : {}),
+        customerId: customerId ?? null,
         customerName: customerName || null,
         totalAmount: parseFloat(totalAmount),
         date: saleDate ? new Date(saleDate) : new Date(),
